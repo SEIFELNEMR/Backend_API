@@ -11,6 +11,9 @@ from authlib.integrations.starlette_client import OAuth
 from fastapi.responses import RedirectResponse
 from datetime import datetime, timedelta
 
+# global variable
+user_access_token = str
+admin_access_token = str
 
 # Configuration
 SECRET_KEY = "d38b291ccebc18af95d4df97a0a98f9bb9eea3c820e771096fa1c5e3a58f3d53"
@@ -259,19 +262,11 @@ async def reset_password_user_route(user_identifier: str, new_password: str):
     return {"Message": "Password Reset Successful"}
 
 
-# @app.put("/change_password_user")
-# async def change_password_user_route(user_password: UserChangePassword, current_user: str = Depends(get_current_user)):
-#     change_password_user(current_user, user_password.current_password, user_password.new_password)
-#     return {"Message": "Password Changed Successfully"}
-@app.put("/change_password_user", response_model=dict)
+@app.put("/change_password_user")
 async def change_password_user_route(user_password: UserChangePassword, current_user: str = Depends(get_current_user)):
-    try:
-        change_password_user(current_user, user_password.current_password, user_password.new_password)
-        return {"message": "Password Changed Successfully"}
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    change_password_user(current_user, user_password.current_password, user_password.new_password)
+    return {"Message": "Password Changed Successfully"}
+
 
 
 @app.post("/logout_user")
@@ -558,7 +553,7 @@ async def logout_admin_route(current_admin: str = Depends(get_current_admin)):
 # Main Load API
 def main():
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
 
 
 if __name__ == "__main__":
