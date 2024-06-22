@@ -11,9 +11,6 @@ from authlib.integrations.starlette_client import OAuth
 from fastapi.responses import RedirectResponse
 from datetime import datetime, timedelta
 
-# global variable
-user_access_token = str
-admin_access_token = str
 
 # Configuration
 SECRET_KEY = "d38b291ccebc18af95d4df97a0a98f9bb9eea3c820e771096fa1c5e3a58f3d53"
@@ -27,14 +24,8 @@ def root():
     return {"Message": "Welcome In Our Application"}
 
 
-# Local Database
-# Database setup
-# DATABASE_URL = r"mssql+pyodbc://LENOVO-DESKTOP/App_Database?driver=ODBC+Driver+17+for+SQL+Server
-# &Trusted_Connection=yes"
-
 # Cloud Database
-DATABASE_URL = (r"mssql+pyodbc://db_aaa253_backenddb_admin:backend1234@SQL8006.site4now.net/db_aaa253_backenddb?driver"
-                r"=ODBC+Driver+17+for+SQL+Server")
+DATABASE_URL = (r"mssql+pyodbc://db_aaa253_backenddb_admin:backend1234@SQL8006.site4now.net/db_aaa253_backenddb?driver=ODBC+Driver+17+for+SQL+Server")
 
 engine = create_engine(DATABASE_URL)
 metadata = MetaData()
@@ -268,7 +259,6 @@ async def change_password_user_route(user_password: UserChangePassword, current_
     return {"Message": "Password Changed Successfully"}
 
 
-
 @app.post("/logout_user")
 async def logout_user_route(current_user: str = Depends(get_current_user)):
     # Check if the current user email matches the user identifier
@@ -433,7 +423,7 @@ def change_password_admin(admin_email: str, current_password: str, new_password:
 # Route
 @app.post("/register_admin")
 async def register_admin_route(admin: AdminRegistration):
-    existing_admin = get_user(engine, admin.admin_email)
+    existing_admin = get_admin(engine, admin.admin_email)
     if existing_admin:
         raise HTTPException(status_code=400, detail="Email already Registered")
 
@@ -509,7 +499,8 @@ async def change_password_admin_route(admin_password: AdminChangePassword,
 
 
 @app.put("/admin_reset_user_password")
-async def admin_reset_user_password(reset_request: AdminResetUserPassword, current_admin: str = Depends(get_current_admin)):
+async def admin_reset_user_password(reset_request: AdminResetUserPassword,
+                                    current_admin: str = Depends(get_current_admin)):
     try:
         # Check if the current admin email matches the admin identifier
         conn = engine.connect()
@@ -553,7 +544,7 @@ async def logout_admin_route(current_admin: str = Depends(get_current_admin)):
 # Main Load API
 def main():
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
 
 
 if __name__ == "__main__":
