@@ -11,9 +11,6 @@ from authlib.integrations.starlette_client import OAuth
 from fastapi.responses import RedirectResponse
 from datetime import datetime, timedelta
 
-# global variable
-user_access_token = str
-admin_access_token = str
 
 # Configuration
 SECRET_KEY = "d38b291ccebc18af95d4df97a0a98f9bb9eea3c820e771096fa1c5e3a58f3d53"
@@ -21,9 +18,18 @@ ALGORITHM = "HS256"
 
 app = FastAPI()
 
-# Database setup DATABASE_URL = r"mssql+pyodbc://LENOVO-DESKTOP/App_Database?driver=ODBC+Driver+17+for+SQL+Server
+
+@app.get("/")
+def root():
+    return {"Message": "Welcome In Our Application"}
+
+
+# Local Database
+# Database setup
+# DATABASE_URL = r"mssql+pyodbc://LENOVO-DESKTOP/App_Database?driver=ODBC+Driver+17+for+SQL+Server
 # &Trusted_Connection=yes"
 
+# Cloud Database
 DATABASE_URL = (r"mssql+pyodbc://db_aaa253_backenddb_admin:backend1234@SQL8006.site4now.net/db_aaa253_backenddb?driver"
                 r"=ODBC+Driver+17+for+SQL+Server")
 
@@ -199,13 +205,13 @@ def change_password_user(user_email: str, current_password: str, new_password: s
 async def register_user_route(user: UserRegistration):
     existing_user = get_user(engine, user.user_email)
     if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="Email already Registered")
 
     register_user(user)
     access_token = create_access_token_user(
         data={"sub": user.user_email}
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"Message": "This Account Registered Successful", "access_token": access_token, "token_type": "bearer"}
 
 
 @app.post("/login_user")
@@ -216,24 +222,24 @@ async def login_user_route(users: UserLogin):
     if not verify_user_credentials(user_email, user_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password. please try again",
+            detail="Invalid Email or Password. Please Try Again",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     user_access_token = create_access_token_user(data={"sub": user_email})
-    return {"access_token": user_access_token, "token_type": "bearer", "message": "Login successful"}
+    return {"Message": "Login Successful", "access_token": user_access_token, "token_type": "bearer"}
 
 
 @app.delete("/delete_user")
 async def delete_user_route(current_user: str = Depends(get_current_user)):
     delete_user(current_user)
-    return {"message": "User deleted successfully"}
+    return {"Message": "User Deleted Successfully"}
 
 
 @app.put("/update_user")
 async def update_user_route(updated_user: UserUpdate, current_user: str = Depends(get_current_user)):
     update_user(current_user, updated_user)
-    return {"message": "User updated successfully"}
+    return {"Message": "User Updated Successfully"}
 
 
 @app.put("/reset_password_user")
@@ -250,18 +256,34 @@ async def reset_password_user_route(user_identifier: str, new_password: str):
         ))
     conn.commit()
     conn.close()
-    return {"message": "Password reset successful"}
+    return {"Message": "Password Reset Successful"}
 
 
-@app.put("/change_password_user")
+# @app.put("/change_password_user")
+# async def change_password_user_route(user_password: UserChangePassword, current_user: str = Depends(get_current_user)):
+#     change_password_user(current_user, user_password.current_password, user_password.new_password)
+#     return {"Message": "Password Changed Successfully"}
+@app.put("/change_password_user", response_model=dict)
 async def change_password_user_route(user_password: UserChangePassword, current_user: str = Depends(get_current_user)):
-    change_password_user(current_user, user_password.current_password, user_password.new_password)
-    return {"message": "Password changed successfully"}
+    try:
+        change_password_user(current_user, user_password.current_password, user_password.new_password)
+        return {"message": "Password Changed Successfully"}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/logout_user")
 async def logout_user_route(current_user: str = Depends(get_current_user)):
-    return {"message": "Logout successful"}
+    # Check if the current user email matches the user identifier
+    conn = engine.connect()
+    user_query = select(users).where(users.c.user_email == current_user)
+    user = conn.execute(user_query).fetchone()
+    if not user:
+        conn.close()
+        return {"Message": "Invalid User"}
+    return {"Message": "Logout Successful"}
 
 
 # Admin Code
@@ -331,10 +353,10 @@ def get_current_admin(token: str = Depends(oauth2_scheme)):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         admin_email = payload.get("sub")
         if admin_email is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Token")
         return admin_email
     except jwt.JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Token")
 
 
 def verify_admin_credentials(admin_email: str, admin_password: str):
@@ -400,16 +422,16 @@ def change_password_admin(admin_email: str, current_password: str, new_password:
             ))
             conn.commit()
             conn.close()
-            return {"message": "Password changed successfully"}
+            return {"Message": "Password Changed Successfully"}
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid current password"
+                detail="Invalid Current Password"
             )
     else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="User not Found"
         )
 
 
@@ -418,13 +440,13 @@ def change_password_admin(admin_email: str, current_password: str, new_password:
 async def register_admin_route(admin: AdminRegistration):
     existing_admin = get_user(engine, admin.admin_email)
     if existing_admin:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="Email already Registered")
 
     register_admin(admin)
     admin_access_token = create_access_token_admin(
         data={"sub": admin.admin_email}
     )
-    return {"access_token": admin_access_token, "token_type": "bearer"}
+    return {"Message": "This Account Registered Successful", "access_token": admin_access_token, "token_type": "bearer"}
 
 
 @app.post("/login_admin")
@@ -435,24 +457,31 @@ async def login_admin_route(admins: AdminLogin):
     if not verify_admin_credentials(admin_email, admin_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password. please try again",
+            detail="Invalid Email or Password. Please Try Again",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     admin_access_token = create_access_token_admin(data={"sub": admin_email})
-    return {"access_token": admin_access_token, "token_type": "bearer", "message": "Login successful"}
+    return {"Message": "Login Successful", "access_token": admin_access_token, "token_type": "bearer"}
 
 
 @app.delete("/delete_admin")
 async def delete_admin_route(current_admin: str = Depends(get_current_admin)):
+    # Check if the current admin email matches the admin identifier
+    conn = engine.connect()
+    admin_query = select(admins).where(admins.c.admin_email == current_admin)
+    admin = conn.execute(admin_query).fetchone()
+    if not admin:
+        conn.close()
+        return {"Message": "Invalid Admin"}
     delete_user(current_admin)
-    return {"message": "Admin deleted successfully"}
+    return {"Message": "Admin Deleted Successfully"}
 
 
 @app.put("/update_admin")
 async def update_admin_route(updated_admin: AdminUpdate, current_admin: str = Depends(get_current_admin)):
     update_admin(current_admin, updated_admin)
-    return {"message": "Admin updated successfully"}
+    return {"Message": "Admin Updated Successfully"}
 
 
 @app.post("/reset_password_admin", status_code=status.HTTP_200_OK)
@@ -470,9 +499,9 @@ async def reset_password_admin_route(reset_request: AdminResetPassword):
             ))
             conn.commit()
             conn.close()
-            return {"message": "Password reset successfully"}
+            return {"Message": "Password Reset Successfully"}
         else:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin not Found")
     except SQLAlchemyError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -481,12 +510,20 @@ async def reset_password_admin_route(reset_request: AdminResetPassword):
 async def change_password_admin_route(admin_password: AdminChangePassword,
                                       current_admin: str = Depends(get_current_admin)):
     change_password_admin(current_admin, admin_password.current_password, admin_password.new_password)
-    return {"message": "Password changed successfully"}
+    return {"Message": "Password Changed Successfully"}
 
 
 @app.put("/admin_reset_user_password")
 async def admin_reset_user_password(reset_request: AdminResetUserPassword, current_admin: str = Depends(get_current_admin)):
     try:
+        # Check if the current admin email matches the admin identifier
+        conn = engine.connect()
+        admin_query = select(admins).where(admins.c.admin_email == current_admin)
+        admin = conn.execute(admin_query).fetchone()
+        if not admin:
+            conn.close()
+            return {"Message": "Invalid Admin"}
+
         conn = engine.connect()
         query = select(users).where(users.c.user_email == reset_request.user_identifier)
         user = conn.execute(query).fetchone()
@@ -499,22 +536,29 @@ async def admin_reset_user_password(reset_request: AdminResetUserPassword, curre
             ))
             conn.commit()
             conn.close()
-            return {"message": "Password reset successfully"}
+            return {"Message": "Password Reset Successfully"}
         else:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not Found")
     except SQLAlchemyError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @app.post("/logout_admin")
 async def logout_admin_route(current_admin: str = Depends(get_current_admin)):
-    return {"message": "Logout successful"}
+    # Check if the current admin email matches the admin identifier
+    conn = engine.connect()
+    admin_query = select(admins).where(admins.c.admin_email == current_admin)
+    admin = conn.execute(admin_query).fetchone()
+    if not admin:
+        conn.close()
+        return {"Message": "Invalid Admin"}
+    return {"Message": "Logout Successful"}
 
 
 # Main Load API
 def main():
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
 
 
 if __name__ == "__main__":
