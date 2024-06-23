@@ -25,7 +25,8 @@ def root():
 
 
 # Cloud Database
-DATABASE_URL = (r"mssql+pyodbc://db_aaa253_backenddb_admin:backend1234@SQL8006.site4now.net/db_aaa253_backenddb?driver=ODBC+Driver+17+for+SQL+Server")
+DATABASE_URL = (r"mssql+pyodbc://db_aaa253_backenddb_admin:backend1234@SQL8006.site4now.net/db_aaa253_backenddb?driver"
+                r"=ODBC+Driver+17+for+SQL+Server")
 
 engine = create_engine(DATABASE_URL)
 metadata = MetaData()
@@ -226,6 +227,13 @@ async def login_user_route(users: UserLogin):
 
 @app.delete("/delete_user")
 async def delete_user_route(current_user: str = Depends(get_current_user)):
+    # Check if the current user email matches the user identifier
+    conn = engine.connect()
+    user_query = select(users).where(users.c.user_email == current_user)
+    user = conn.execute(user_query).fetchone()
+    if not user:
+        conn.close()
+        return {"Message": "Invalid User"}
     delete_user(current_user)
     return {"Message": "User Deleted Successfully"}
 
