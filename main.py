@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, status, Depends, Request
+from fastapi import FastAPI, HTTPException, status, Depends, Request, File, UploadFile
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import create_engine, Column, Integer, String, MetaData, Table, select
@@ -6,6 +6,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import secrets
+from pathlib import Path
+from fastapi.responses import FileResponse
 from starlette.middleware.sessions import SessionMiddleware
 from authlib.integrations.starlette_client import OAuth
 from fastapi.responses import RedirectResponse
@@ -25,8 +27,7 @@ def root():
 
 
 # Cloud Database
-DATABASE_URL = (r"mssql+pyodbc://db_aaa253_backenddb_admin:backend1234@SQL8006.site4now.net/db_aaa253_backenddb?driver"
-                r"=ODBC+Driver+17+for+SQL+Server")
+DATABASE_URL = (r"mssql+pyodbc://db_aaa253_backenddb_admin:backend1234@SQL8006.site4now.net/db_aaa253_backenddb?driver=ODBC+Driver+17+for+SQL+Server")
 
 engine = create_engine(DATABASE_URL)
 metadata = MetaData()
@@ -38,7 +39,8 @@ users = Table(
     Column("user_name", String(length=255), unique=True, index=True),
     Column("user_email", String, unique=True, index=True),
     Column("user_password", String),
-    Column("user_phone", String)
+    Column("user_phone", String),
+    Column("user_photo", String, nullable=True)
 )
 
 metadata.create_all(bind=engine)
@@ -174,6 +176,8 @@ def change_password_user(user_email: str, current_password: str, new_password: s
     result = conn.execute(query).fetchone()
 
     if result:
+        if current_password == new_password:
+            raise HTTPException(status_code=400, detail="New password must be different from the current password")
         current_hashed_password = result[0]
         if password_context.verify(current_password, current_hashed_password):
             hashed_new_password = hash_password(new_password)
@@ -267,6 +271,43 @@ async def change_password_user_route(user_password: UserChangePassword, current_
     return {"Message": "Password Changed Successfully"}
 
 
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@app.post("/upload_profile_photo_user")
+async def upload_profile_photo_user_route(file: UploadFile = File(...), current_user: str = Depends(get_current_user)):
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    file_path = UPLOAD_DIR / file.filename
+
+    with open(file_path, "wb") as buffer:
+        buffer.write(await file.read())
+
+    file_url = f"/uploads/{file.filename}"
+
+    conn = engine.connect()
+    conn.execute(users.update().where(users.c.user_email == current_user).values(user_photo=file_url))
+    conn.commit()
+    conn.close()
+
+    return {
+        "message": "Profile photo uploaded successfully",
+        "file_name": file.filename,
+        "file_url": file_url
+    }
+
+
+@app.get("/uploads/{file_name}")
+async def serve_file(file_name: str):
+    file_path = UPLOAD_DIR / file_name
+    if file_path.exists():
+        return FileResponse(file_path)
+    else:
+        raise HTTPException(status_code=404, detail="File not found")
+
+
 @app.post("/logout_user")
 async def logout_user_route(current_user: str = Depends(get_current_user)):
     # Check if the current user email matches the user identifier
@@ -288,7 +329,8 @@ admins = Table(
     Column("admin_name", String(length=255), unique=True, index=True),
     Column("admin_email", String),
     Column("admin_password", String),
-    Column("admin_phone", String)
+    Column("admin_phone", String),
+    Column("admin_photo", String, nullable=True)
 )
 metadata.create_all(bind=engine)
 
@@ -407,6 +449,8 @@ def change_password_admin(admin_email: str, current_password: str, new_password:
     result = conn.execute(query).fetchone()
 
     if result:
+        if current_password == new_password:
+            raise HTTPException(status_code=400, detail="New password must be different from the current password")
         current_hashed_password = result[0]
         if password_context.verify(current_password, current_hashed_password):
             hashed_new_password = hash_password(new_password)
